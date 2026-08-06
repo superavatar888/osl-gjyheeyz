@@ -1,0 +1,50 @@
+name: OpenSea Auto Sell
+
+on:
+  schedule:
+    - cron: "6 */6 * * *"
+  workflow_dispatch: {}
+
+concurrency:
+  group: sell
+  cancel-in-progress: false
+
+jobs:
+  sell:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: 安装依赖
+        run: npm install --no-save @opensea/sdk@11.7.2 ethers@^6.13.0 dotenv@^16.0.1 random@^3.0.6 colors@^1.4.0 moment@^2.29.4
+
+      - name: Patch SDK
+        run: node patch-sdk.js
+
+      - name: 运行上架
+        run: node sell.js
+        env:
+          MNEMONIC: ${{ secrets.MNEMONIC }}
+          INFURA_KEY: ${{ secrets.INFURA_KEY }}
+          NFT_CONTRACT_ADDRESS: ${{ secrets.NFT_CONTRACT_ADDRESS }}
+          OWNER_ADDRESS: ${{ secrets.OWNER_ADDRESS }}
+          NETWORK: mainnet
+          API_KEY: ${{ secrets.API_KEY }}
+          WALLET_INDEX: ${{ secrets.WALLET_INDEX }}
+          MAX_PRICE: ${{ secrets.MAX_PRICE }}
+          MIN_PRICE: ${{ secrets.MIN_PRICE }}
+          RUN_MINUTES: 330
+
+      - name: 保存状态
+        run: |
+          git config user.name "github-actions"
+          git config user.email "actions@github.com"
+          git add -A
+          git diff --cached --quiet && echo "无变化" || (git commit -m "state update $(date -u +%Y%m%d%H%M)" && git push)
