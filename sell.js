@@ -59,6 +59,24 @@ Logger.warn(`MIN PRICE = ${min_price}`);
 Logger.warn(`MAX PRICE = ${max_price}`);
 Logger.info("=============================================================");
 
+
+// 健康状态记录（监控用）
+function writeStatus(extra) {
+    try {
+        const s = Object.assign({
+            index: current_index,
+            total: tokens.length,
+            success: statusStats.success,
+            fail: statusStats.fail,
+            lastSuccess: statusStats.lastSuccess,
+            lastError: statusStats.lastError,
+            time: Math.floor(Date.now()/1000)
+        }, extra || {});
+        fs.writeFileSync(PROJECT_NAME + '-status.json', JSON.stringify(s));
+    } catch(e) {}
+}
+const statusStats = { success: 0, fail: 0, lastSuccess: '', lastError: '' };
+
 function wait(ms) {
     return new Promise(resolve => setTimeout(() => resolve(), ms));
 }
@@ -234,6 +252,9 @@ async function main() {
             listingTime: listingTime,
         });
 
+        statusStats.success++;
+        statusStats.lastSuccess = new Date().toISOString();
+        writeStatus();
         Logger.success(`Successfully created a listing! tokenId: ${tokenId}, price: ${price} ETH, cost sec = ${(Date.now() / 1000 - current_time).toFixed(2)}, current_index: ${current_index}`);
 
         if (current_index >= tokens.length) {
@@ -253,6 +274,9 @@ async function main() {
         const errMsg = (e && e.message) ? e.message : String(e);
         // 已卖出/无效资产类错误 → 剔除该 token，继续下一个
         if (/404|not found|does not exist|doesn'?t exist|no asset|invalid asset|not indexed|NOT_FOUND|asset.*not/i.test(errMsg)) {
+            statusStats.fail++;
+            statusStats.lastError = "剔除:" + errMsg.slice(0,50);
+            writeStatus();
             Logger.warn(`🚫 token 已卖出/无效，剔除: ${tokens[current_index]}  | ${errMsg.slice(0, 80)}`);
             try {
                 // 从 tokens.json 移除该行
@@ -266,6 +290,9 @@ async function main() {
             }
             err_retrycount = 0;
         } else {
+            statusStats.fail++;
+            statusStats.lastError = errMsg.slice(0,80);
+            writeStatus();
             Logger.err(`logerr: ${errMsg}, err_retrycount: ${err_retrycount}, current_index: ${current_index}`);
             err_retrycount += 1;
             if (err_retrycount > RETRY_COUNT) {
