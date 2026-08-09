@@ -209,7 +209,8 @@ function check_list_time(token) {
 function recalcInterval() {
     // 极致模式：固定 1.5s 间隔（不再按 token 数分摊，最大化 API 速率）
     intervalTime = 1500;
-    Logger.info(`🔁 新一轮开始: token数=${n}, 间隔=${(intervalTime/1000).toFixed(1)}s, 一轮时长=${(CYCLE_SECONDS/3600).toFixed(0)}h`);
+    const n = tokens.length > 0 ? tokens.length : 10000;
+    Logger.info(`🔁 极致模式: token数=${n}, 间隔=1.5s`);
 }
 
 ///start
