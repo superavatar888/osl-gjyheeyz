@@ -33,11 +33,18 @@ jobs:
           OWNER_ADDRESS: ${{ secrets.OWNER_ADDRESS }}
           NETWORK: mainnet
           API_KEY: ${{ secrets.API_KEY }}
+          API_A_1: ${{ secrets.API_KEY_1 }}
+          API_A_2: ${{ secrets.API_KEY_2 }}
+          INFURA_A_1: ${{ secrets.INFURA_KEY_1 }}
+          INFURA_A_2: ${{ secrets.INFURA_KEY_2 }}
+          INFURA_A_3: ${{ secrets.INFURA_KEY_3 }}
+          INFURA_A_4: ${{ secrets.INFURA_KEY_4 }}
+          INFURA_A_5: ${{ secrets.INFURA_KEY_5 }}
+          INFURA_A_6: ${{ secrets.INFURA_KEY_6 }}
           WALLET_INDEX: ${{ secrets.WALLET_INDEX }}
           MAX_PRICE: ${{ secrets.MAX_PRICE }}
           MIN_PRICE: ${{ secrets.MIN_PRICE }}
-          RUN_MINUTES: 330
-      - name: 保存状态
+          RUN_MINUTES: 330      - name: 保存状态
         run: |
           git config user.name "github-actions"
           git config user.email "actions@github.com"
