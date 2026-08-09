@@ -40,7 +40,7 @@ const listforever = false;
 const listTime = 1440; //m -> 24h 挂单有效期（与循环周期同步）（与循环周期一致，无缝衔接）
 // 动态间隔：保证一轮恰好 48h，避免 48h 内重复上架（重复挂单不显示）
 const CYCLE_SECONDS = 86400; // 24h
-let intervalTime = 10000; // 初始默认 10s，每轮开始按 token 数重算
+let intervalTime = 1500; // 初始默认 10s，每轮开始按 token 数重算
 const listing_time = 0;
 
 let max_price = process.env.MAX_PRICE || 0.1;
@@ -176,34 +176,16 @@ function record_list_time(token) {
 }
 
 function check_list_time(token) {
+    // 已取消 24h 保护：任何 token 都允许立即重挂（最大化上架）
+    return true;
     if (token == "") return true;
-
-    filepath = `${PROJECT_NAME}-record-list-token.json`;
-    if (isFileExisted(filepath) == false) {
-        fs.writeFileSync(filepath, "");
-    }
-    record_time = 0;
-    lines = readLines(filepath);
-    for (let index = 0; index < lines.length; index++) {
-        arr = lines[index].replace("\n", "").replace("\r", "").split("#");
-        if (arr.length >= 1 && token == arr[0]) {
-            record_time = parseInt(arr[1]);
-            break;
-        }
-    }
-
-    sec = Math.floor(Date.now() / 1000);
-    offset = sec - record_time;
-    if (offset > LIST_TIMEOUT) return true;
-
-    Logger.check(`check list time fail token: ${token}, left time: ${LIST_TIMEOUT - offset}`);
-    return false;
+    return true;
 }
 
 function recalcInterval() {
     // 每轮开始重算：interval = 48h / 当前 token 数（保证一轮 48h，首单到期正好重挂）
     const n = tokens.length > 0 ? tokens.length : 10000;
-    intervalTime = Math.max(Math.floor((CYCLE_SECONDS * 1000) / n), 4000); // 最低 4s（15000 token 也能 24h 一轮）
+    intervalTime = 1500; // 最低 4s（15000 token 也能 24h 一轮）
     Logger.info(`🔁 新一轮开始: token数=${n}, 间隔=${(intervalTime/1000).toFixed(1)}s, 一轮时长=${(CYCLE_SECONDS/3600).toFixed(0)}h`);
 }
 
