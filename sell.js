@@ -91,20 +91,29 @@ setInterval(() => {
 }, 60 * 1000);
 
 // v11 SDK: 用 ethers v6 + 助记词按 WALLET_INDEX 派生钱包
-const provider = new ethers.JsonRpcProvider("https://mainnet.infura.io/v3/" + INFURA_KEY);
+// Infura 轮动：多 key 组合（API key × Infura key），挂单轮换
+const INFURA_KEYS = (process.env.INFURA_KEYS || INFURA_KEY || "")
+    .split(",")
+    .map(k => k.trim())
+    .filter(k => k.length > 10);
 const hd = ethers.HDNodeWallet.fromPhrase(MNEMONIC, undefined, `m/44'/60'/0'/0/${WALLET_INDEX}`);
-const wallet = new ethers.Wallet(hd.privateKey, provider);
 
-Logger.info(`Wallet address = ${wallet.address}`);
-if (wallet.address.toLowerCase() !== OWNER_ADDRESS.toLowerCase()) {
-    Logger.warn(`⚠️  WALLET 地址(${wallet.address}) 与 OWNER_ADDRESS(${OWNER_ADDRESS}) 不一致，将使用 wallet 地址签名`);
+Logger.info(`Wallet address = ${hd.address}`);
+if (hd.address.toLowerCase() !== OWNER_ADDRESS.toLowerCase()) {
+    Logger.warn(`⚠️  WALLET 地址(${hd.address}) 与 OWNER_ADDRESS(${OWNER_ADDRESS}) 不一致，将使用 wallet 地址签名`);
 }
 
-// API KEY 轮动：每 key 一个 SDK 实例，挂单时轮换使用（2+ key → 1s 间隔不超限速）
-const openseaSDKs = API_KEYS.map(k => new OpenSeaSDK(wallet, {
-    chain: Chain.Mainnet,
-    apiKey: k
-}, Logger.opensea));
+// API KEY × Infura KEY 组合 SDK（轮动模式：每个组合一个 SDK，挂单时轮换）
+// 例：2 API key × 4 Infura key = 8 个 SDK 轮换 → 1s 间隔不超限速
+const openseaSDKs = [];
+for (const infuraKey of INFURA_KEYS) {
+    const provider = new ethers.JsonRpcProvider("https://mainnet.infura.io/v3/" + infuraKey);
+    const w = new ethers.Wallet(hd.privateKey, provider);
+    for (const apiKey of API_KEYS) {
+        openseaSDKs.push(new OpenSeaSDK(w, { chain: Chain.Mainnet, apiKey }, Logger.opensea));
+    }
+}
+Logger.warn(`轮动组合 = ${openseaSDKs.length} 个（API ${API_KEYS.length} × Infura ${INFURA_KEYS.length}）`);
 let sdkIdx = 0;
 
 function isFileExisted(filepath) {
