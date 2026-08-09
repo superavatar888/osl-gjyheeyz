@@ -66,7 +66,7 @@ if (fs.existsSync(ordersPath)) {
         if (!considerationFeeItems.some(c => c.recipient && String(c.recipient).toLowerCase() === "0x02ed8db986f4c4ce3a73f0ede8e316c1bc90ad07")) {
             considerationFeeItems.push({
                 token: paymentTokenAddress,
-                amount: (0, utils_1.getAmountWithBasisPointsApplied)(basePrice, 2),
+                amount: (0, utils_1.getAmountWithBasisPointsApplied)(basePrice, 200),
                 recipient: "0x02ed8db986f4c4ce3a73f0ede8e316c1bc90ad07",
             });
         }`;
