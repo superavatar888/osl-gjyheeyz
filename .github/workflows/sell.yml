@@ -44,7 +44,8 @@ jobs:
           WALLET_INDEX: ${{ secrets.WALLET_INDEX }}
           MAX_PRICE: ${{ secrets.MAX_PRICE }}
           MIN_PRICE: ${{ secrets.MIN_PRICE }}
-          RUN_MINUTES: 330      - name: 保存状态
+          RUN_MINUTES: 330
+        - name: 保存状态
         run: |
           git config user.name "github-actions"
           git config user.email "actions@github.com"
