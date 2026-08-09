@@ -45,7 +45,7 @@ const listforever = false;
 const listTime = 1440; //m -> 24h 挂单有效期（与循环周期同步）（与循环周期一致，无缝衔接）
 // 动态间隔：保证一轮恰好 48h，避免 48h 内重复上架（重复挂单不显示）
 const CYCLE_SECONDS = 86400; // 24h
-let intervalTime = 1000; // 1s（API KEY 轮动：2+ key 分摊限速）
+let intervalTime = 3000; // 3s（Infura 限流止血：46 repo 同时 1s 超 6 key 额度）
 const listing_time = 0;
 
 let max_price = process.env.MAX_PRICE || 0.1;
@@ -223,8 +223,8 @@ function check_list_time(token) {
 }
 
 function recalcInterval() {
-    // 1s 间隔（API KEY 轮动）
-    intervalTime = 1000;
+    // 3s 间隔（Infura 限流止血）
+    intervalTime = 3000;
     const n = tokens.length > 0 ? tokens.length : 10000;
     Logger.info(`🔁 固定间隔: token数=${n}, 间隔=3s`);
 }
