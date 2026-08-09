@@ -1,4 +1,4 @@
-// patch-sdk.js - 容器内禁用 shared storefront -> adapter 重映射 + enforcement 修复
+// patch-sdk.js - 容器内禁用 shared storefront -> adapter 重映射 + Infura 请求缓存优化
 const fs = require('fs');
 const path = require('path');
 
@@ -30,6 +30,39 @@ if (src.includes(old)) {
 } else {
     console.error('❌ protocol.js patch pattern not found');
     process.exit(1);
+}
+
+// ========== 2. seaport-js getCounter 缓存（counter 不变，避免每次挂单查 Infura）==========
+const seaportPath = path.join(cwd, 'node_modules', '@opensea', 'seaport-js', 'lib', 'seaport.js');
+if (fs.existsSync(seaportPath)) {
+    let ss = fs.readFileSync(seaportPath, 'utf-8');
+    const cOld = `    Seaport.prototype.getCounter = function (offerer) {
+        return this.contract
+            .getCounter(offerer)
+            .then(function (counter) { return counter.toNumber(); });
+    };`;
+    const cNew = `    Seaport.prototype.getCounter = function (offerer) {
+        // PATCH: counter 缓存（钱包 counter 不变，避免每次挂单查 Infura）
+        if (this._counterCache && this._counterCache[offerer] !== undefined) {
+            return Promise.resolve(this._counterCache[offerer]);
+        }
+        var _this = this;
+        return this.contract
+            .getCounter(offerer)
+            .then(function (counter) { return counter.toNumber(); })
+            .then(function (c) { if (!_this._counterCache) { _this._counterCache = {}; } _this._counterCache[offerer] = c; return c; });
+    };`;
+    if (ss.includes(cOld) && !ss.includes('PATCH: counter 缓存')) {
+        ss = ss.replace(cOld, cNew);
+        fs.writeFileSync(seaportPath, ss);
+        console.log('✅ seaport.js counter cache patched');
+    } else if (ss.includes('PATCH: counter 缓存')) {
+        console.log('⏭️  counter cache already patched');
+    } else {
+        console.log('⚠️ counter patch pattern not found（可能版本不同）');
+    }
+} else {
+    console.log('⚠️ seaport-js 不存在（跳过）');
 }
 
 // ========== 2. enforcement 修复（fee 2 + required_zone 兜底）==========
