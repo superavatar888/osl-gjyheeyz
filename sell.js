@@ -15,7 +15,7 @@ const API_KEY = process.env.API_KEY;
 const WALLET_INDEX = parseInt(process.env.WALLET_INDEX || "0", 10);
 
 const PROJECT_NAME = "Cyber Ape Frens";
-const LIST_TIMEOUT = 86400; //24h（OpenSea 当前重复上架显示限制） //#48h-> sec（OpenSea 48h 内重复上架不显示，必须等 48h 才能重挂）
+const LIST_TIMEOUT = 86400; //24h（已取消保护，check_list_time 直接通过）
 
 Logger.info("==========================KEYS===============================");
 // 安全：助记词/API key 打码显示，避免暴露（GitHub Actions 日志公开）
@@ -40,7 +40,7 @@ const listforever = false;
 const listTime = 1440; //m -> 24h 挂单有效期（与循环周期同步）（与循环周期一致，无缝衔接）
 // 动态间隔：保证一轮恰好 48h，避免 48h 内重复上架（重复挂单不显示）
 const CYCLE_SECONDS = 86400; // 24h
-let intervalTime = 1500; // 初始默认 10s，每轮开始按 token 数重算
+let intervalTime = 1500; // 初始 1.5s（极致速度，最大化 API 利用）
 const listing_time = 0;
 
 let max_price = process.env.MAX_PRICE || 0.1;
@@ -59,27 +59,31 @@ Logger.warn(`MIN PRICE = ${min_price}`);
 Logger.warn(`MAX PRICE = ${max_price}`);
 Logger.info("=============================================================");
 
-
-// 健康状态记录（监控用）
-function writeStatus(extra) {
-    try {
-        const s = Object.assign({
-            index: current_index,
-            total: tokens.length,
-            success: statusStats.success,
-            fail: statusStats.fail,
-            lastSuccess: statusStats.lastSuccess,
-            lastError: statusStats.lastError,
-            time: Math.floor(Date.now()/1000)
-        }, extra || {});
-        fs.writeFileSync(PROJECT_NAME + '-status.json', JSON.stringify(s));
-    } catch(e) {}
-}
-const statusStats = { success: 0, fail: 0, lastSuccess: '', lastError: '' };
-
 function wait(ms) {
     return new Promise(resolve => setTimeout(() => resolve(), ms));
 }
+
+// 超时包裹：防止网络挂起导致卡死（createListing 无响应时 60s 后抛错）
+async function withTimeout(promise, ms, msg) {
+    let timer;
+    const timeout = new Promise((_, reject) => {
+        timer = setTimeout(() => reject(new Error(msg || "Timeout")), ms);
+    });
+    try {
+        return await Promise.race([promise, timeout]);
+    } finally {
+        clearTimeout(timer);
+    }
+}
+
+// 看门狗：8 分钟无任何挂单进展 → 强制退出（防止隐藏卡点导致永远 in_progress）
+let lastActivity = Date.now();
+setInterval(() => {
+    if (Date.now() - lastActivity > 8 * 60 * 1000) {
+        console.error("⏰ 看门狗：8 分钟无进展，强制退出");
+        process.exit(1);
+    }
+}, 60 * 1000);
 
 // v11 SDK: 用 ethers v6 + 助记词按 WALLET_INDEX 派生钱包
 const provider = new ethers.JsonRpcProvider("https://mainnet.infura.io/v3/" + INFURA_KEY);
@@ -176,16 +180,35 @@ function record_list_time(token) {
 }
 
 function check_list_time(token) {
-    // 已取消 24h 保护：任何 token 都允许立即重挂（最大化上架）
+    // 已取消 24h 保护：任何 token 都允许立即重挂（用户配置：最大化上架）
     return true;
     if (token == "") return true;
-    return true;
+
+    filepath = `${PROJECT_NAME}-record-list-token.json`;
+    if (isFileExisted(filepath) == false) {
+        fs.writeFileSync(filepath, "");
+    }
+    record_time = 0;
+    lines = readLines(filepath);
+    for (let index = 0; index < lines.length; index++) {
+        arr = lines[index].replace("\n", "").replace("\r", "").split("#");
+        if (arr.length >= 1 && token == arr[0]) {
+            record_time = parseInt(arr[1]);
+            break;
+        }
+    }
+
+    sec = Math.floor(Date.now() / 1000);
+    offset = sec - record_time;
+    if (offset > LIST_TIMEOUT) return true;
+
+    Logger.check(`check list time fail token: ${token}, left time: ${LIST_TIMEOUT - offset}`);
+    return false;
 }
 
 function recalcInterval() {
-    // 每轮开始重算：interval = 48h / 当前 token 数（保证一轮 48h，首单到期正好重挂）
-    const n = tokens.length > 0 ? tokens.length : 10000;
-    intervalTime = 1500; // 最低 4s（15000 token 也能 24h 一轮）
+    // 极致模式：固定 1.5s 间隔（不再按 token 数分摊，最大化 API 速率）
+    intervalTime = 1500;
     Logger.info(`🔁 新一轮开始: token数=${n}, 间隔=${(intervalTime/1000).toFixed(1)}s, 一轮时长=${(CYCLE_SECONDS/3600).toFixed(0)}h`);
 }
 
@@ -223,7 +246,7 @@ async function main() {
 
         Logger.info(`Start list: expirationTime: ${expirationTime}, tokenId: ${tokenId}, current_time: ${current_time}, current_index: ${current_index}`);
         console.log(expirationTime);
-        const listing = await openseaSDK.createListing({
+        const listing = await withTimeout(openseaSDK.createListing({
             asset: {
                 tokenId: tokenId,
                 tokenAddress: NFT_CONTRACT_ADDRESS
@@ -232,12 +255,10 @@ async function main() {
             expirationTime: expirationTime,
             accountAddress: OWNER_ADDRESS,
             listingTime: listingTime,
-        });
+        }), 60000, "createListing 超时(60s)");
 
-        statusStats.success++;
-        statusStats.lastSuccess = new Date().toISOString();
-        writeStatus();
         Logger.success(`Successfully created a listing! tokenId: ${tokenId}, price: ${price} ETH, cost sec = ${(Date.now() / 1000 - current_time).toFixed(2)}, current_index: ${current_index}`);
+        lastActivity = Date.now();
 
         if (current_index >= tokens.length) {
             current_index = 0;
@@ -256,9 +277,6 @@ async function main() {
         const errMsg = (e && e.message) ? e.message : String(e);
         // 已卖出/无效资产类错误 → 剔除该 token，继续下一个
         if (/404|not found|does not exist|doesn'?t exist|no asset|invalid asset|not indexed|NOT_FOUND|asset.*not/i.test(errMsg)) {
-            statusStats.fail++;
-            statusStats.lastError = "剔除:" + errMsg.slice(0,50);
-            writeStatus();
             Logger.warn(`🚫 token 已卖出/无效，剔除: ${tokens[current_index]}  | ${errMsg.slice(0, 80)}`);
             try {
                 // 从 tokens.json 移除该行
@@ -272,9 +290,6 @@ async function main() {
             }
             err_retrycount = 0;
         } else {
-            statusStats.fail++;
-            statusStats.lastError = errMsg.slice(0,80);
-            writeStatus();
             Logger.err(`logerr: ${errMsg}, err_retrycount: ${err_retrycount}, current_index: ${current_index}`);
             err_retrycount += 1;
             if (err_retrycount > RETRY_COUNT) {
