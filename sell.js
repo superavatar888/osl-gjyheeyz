@@ -11,7 +11,17 @@ const INFURA_KEY = process.env.INFURA_KEY;
 const OWNER_ADDRESS = process.env.OWNER_ADDRESS;
 const NFT_CONTRACT_ADDRESS = process.env.NFT_CONTRACT_ADDRESS;
 const NETWORK = process.env.NETWORK;
-const API_KEYS = (process.env.API_KEYS || process.env.API_KEY || "")
+// base64 解码 key 列表（防止 gh 设置 secrets 时逗号截断——用 base64 传输，解码回逗号分隔）
+function parseKeyList(str) {
+    if (!str) return "";
+    try {
+        const decoded = Buffer.from(str.trim(), 'base64').toString();
+        const keys = decoded.split(',').map(k => k.trim()).filter(k => /^[a-f0-9]{32}$/i.test(k));
+        if (keys.length >= 1) return decoded;
+    } catch (e) {}
+    return str;
+}
+const API_KEYS = parseKeyList(process.env.API_KEYS || process.env.API_KEY || "")
     .split(",")
     .map(k => k.trim())
     .filter(k => k.length > 10);
@@ -92,7 +102,7 @@ setInterval(() => {
 
 // v11 SDK: 用 ethers v6 + 助记词按 WALLET_INDEX 派生钱包
 // Infura 轮动：多 key 组合（API key × Infura key），挂单轮换
-const INFURA_KEYS = (process.env.INFURA_KEYS || INFURA_KEY || "")
+const INFURA_KEYS = parseKeyList(process.env.INFURA_KEYS || INFURA_KEY || "")
     .split(",")
     .map(k => k.trim())
     .filter(k => k.length > 10);
