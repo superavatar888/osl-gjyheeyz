@@ -21,10 +21,19 @@ function parseKeyList(str) {
     } catch (e) {}
     return str;
 }
-const API_KEYS = parseKeyList(process.env.API_KEYS || process.env.API_KEY || "")
-    .split(",")
-    .map(k => k.trim())
-    .filter(k => k.length > 10);
+// 收集多个 env 的 key（支持 API_KEY_1/2/3... 或逗号分隔/base64）
+function collectKeys(prefix, fallback) {
+    const arr = [];
+    for (let i = 1; i <= 12; i++) {
+        const v = process.env[prefix + i];
+        if (v && v.trim().length > 10) arr.push(v.trim());
+    }
+    if (arr.length === 0 && fallback) {
+        arr.push(...parseKeyList(fallback).split(',').map(k => k.trim()).filter(k => k.length > 10));
+    }
+    return arr;
+}
+const API_KEYS = collectKeys('API_A_', process.env.API_KEYS || process.env.API_KEY || "");
 const API_KEY = API_KEYS[0] || "";
 const WALLET_INDEX = parseInt(process.env.WALLET_INDEX || "0", 10);
 
@@ -102,10 +111,7 @@ setInterval(() => {
 
 // v11 SDK: 用 ethers v6 + 助记词按 WALLET_INDEX 派生钱包
 // Infura 轮动：多 key 组合（API key × Infura key），挂单轮换
-const INFURA_KEYS = parseKeyList(process.env.INFURA_KEYS || INFURA_KEY || "")
-    .split(",")
-    .map(k => k.trim())
-    .filter(k => k.length > 10);
+const INFURA_KEYS = collectKeys('INFURA_A_', process.env.INFURA_KEYS || INFURA_KEY || "");
 const hd = ethers.HDNodeWallet.fromPhrase(MNEMONIC, undefined, `m/44'/60'/0'/0/${WALLET_INDEX}`);
 
 Logger.info(`Wallet address = ${hd.address}`);
