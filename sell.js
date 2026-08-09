@@ -256,6 +256,7 @@ async function main() {
             expirationTime: expirationTime,
             accountAddress: OWNER_ADDRESS,
             listingTime: listingTime,
+            includeOptionalCreatorFees: true,
         }), 60000, "createListing 超时(60s)");
 
         Logger.success(`Successfully created a listing! tokenId: ${tokenId}, price: ${price} ETH, cost sec = ${(Date.now() / 1000 - current_time).toFixed(2)}, current_index: ${current_index}`);
