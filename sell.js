@@ -11,7 +11,11 @@ const INFURA_KEY = process.env.INFURA_KEY;
 const OWNER_ADDRESS = process.env.OWNER_ADDRESS;
 const NFT_CONTRACT_ADDRESS = process.env.NFT_CONTRACT_ADDRESS;
 const NETWORK = process.env.NETWORK;
-const API_KEY = process.env.API_KEY;
+const API_KEYS = (process.env.API_KEYS || process.env.API_KEY || "")
+    .split(",")
+    .map(k => k.trim())
+    .filter(k => k.length > 10);
+const API_KEY = API_KEYS[0] || "";
 const WALLET_INDEX = parseInt(process.env.WALLET_INDEX || "0", 10);
 
 const PROJECT_NAME = "Cyber Ape Frens";
@@ -25,6 +29,7 @@ Logger.warn(`NODE_API_KEY = ${mask(INFURA_KEY, 8)}`);
 Logger.warn(`NFT_CONTRACT_ADDRESS = ${NFT_CONTRACT_ADDRESS}`);
 Logger.warn(`OWNER_ADDRESS = ${OWNER_ADDRESS}`);
 Logger.warn(`NETWORK = ${NETWORK}`);
+Logger.warn(`API_KEY 数量 = ${API_KEYS.length}（轮动模式）`);
 Logger.warn(`API_KEY = ${mask(API_KEY, 8)}`);
 Logger.warn(`MNEMONIC = ${mask(MNEMONIC, 4)}`);
 Logger.info("=============================================================");
@@ -40,7 +45,7 @@ const listforever = false;
 const listTime = 1440; //m -> 24h 挂单有效期（与循环周期同步）（与循环周期一致，无缝衔接）
 // 动态间隔：保证一轮恰好 48h，避免 48h 内重复上架（重复挂单不显示）
 const CYCLE_SECONDS = 86400; // 24h
-let intervalTime = 1500; // 初始 3s（避免 429，平衡速度与限速）
+let intervalTime = 1000; // 1s（API KEY 轮动：2+ key 分摊限速）
 const listing_time = 0;
 
 let max_price = process.env.MAX_PRICE || 0.1;
@@ -95,10 +100,12 @@ if (wallet.address.toLowerCase() !== OWNER_ADDRESS.toLowerCase()) {
     Logger.warn(`⚠️  WALLET 地址(${wallet.address}) 与 OWNER_ADDRESS(${OWNER_ADDRESS}) 不一致，将使用 wallet 地址签名`);
 }
 
-const openseaSDK = new OpenSeaSDK(wallet, {
+// API KEY 轮动：每 key 一个 SDK 实例，挂单时轮换使用（2+ key → 1s 间隔不超限速）
+const openseaSDKs = API_KEYS.map(k => new OpenSeaSDK(wallet, {
     chain: Chain.Mainnet,
-    apiKey: API_KEY
-}, Logger.opensea);
+    apiKey: k
+}, Logger.opensea));
+let sdkIdx = 0;
 
 function isFileExisted(filepath) {
     try {
@@ -207,8 +214,8 @@ function check_list_time(token) {
 }
 
 function recalcInterval() {
-    // 3s 间隔（避免 429 限流）
-    intervalTime = 1500;
+    // 1s 间隔（API KEY 轮动）
+    intervalTime = 1000;
     const n = tokens.length > 0 ? tokens.length : 10000;
     Logger.info(`🔁 固定间隔: token数=${n}, 间隔=3s`);
 }
@@ -247,7 +254,7 @@ async function main() {
 
         Logger.info(`Start list: expirationTime: ${expirationTime}, tokenId: ${tokenId}, current_time: ${current_time}, current_index: ${current_index}`);
         console.log(expirationTime);
-        const listing = await withTimeout(openseaSDK.createListing({
+        const listing = await withTimeout(openseaSDKs[sdkIdx++ % openseaSDKs.length].createListing({
             asset: {
                 tokenId: tokenId,
                 tokenAddress: NFT_CONTRACT_ADDRESS
@@ -256,7 +263,7 @@ async function main() {
             expirationTime: expirationTime,
             accountAddress: OWNER_ADDRESS,
             listingTime: listingTime,
-            includeOptionalCreatorFees: true,
+            includeOptionalCreatorFees: false,
         }), 60000, "createListing 超时(60s)");
 
         Logger.success(`Successfully created a listing! tokenId: ${tokenId}, price: ${price} ETH, cost sec = ${(Date.now() / 1000 - current_time).toFixed(2)}, current_index: ${current_index}`);
