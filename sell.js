@@ -40,7 +40,7 @@ const listforever = false;
 const listTime = 1440; //m -> 24h 挂单有效期（与循环周期同步）（与循环周期一致，无缝衔接）
 // 动态间隔：保证一轮恰好 48h，避免 48h 内重复上架（重复挂单不显示）
 const CYCLE_SECONDS = 86400; // 24h
-let intervalTime = 1500; // 初始 1.5s（极致速度，最大化 API 利用）
+let intervalTime = 3000; // 初始 3s（避免 429，平衡速度与限速）
 const listing_time = 0;
 
 let max_price = process.env.MAX_PRICE || 0.1;
@@ -207,10 +207,10 @@ function check_list_time(token) {
 }
 
 function recalcInterval() {
-    // 极致模式：固定 1.5s 间隔（不再按 token 数分摊，最大化 API 速率）
-    intervalTime = 1500;
+    // 3s 间隔（避免 429 限流）
+    intervalTime = 3000;
     const n = tokens.length > 0 ? tokens.length : 10000;
-    Logger.info(`🔁 极致模式: token数=${n}, 间隔=1.5s`);
+    Logger.info(`🔁 固定间隔: token数=${n}, 间隔=3s`);
 }
 
 ///start
