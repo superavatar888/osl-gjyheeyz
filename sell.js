@@ -61,7 +61,7 @@ var cyclelist = true;
 
 const RETRY_COUNT = 2;
 const listforever = false;
-const listTime = 1440; //m -> 24h 挂单有效期（与循环周期同步）（与循环周期一致，无缝衔接）
+const listTime = 720; //m -> 12h 挂单有效期
 // 动态间隔：保证一轮恰好 48h，避免 48h 内重复上架（重复挂单不显示）
 const CYCLE_SECONDS = 86400; // 24h
 let intervalTime = 3000; // 3s（Infura 限流止血：46 repo 同时 1s 超 6 key 额度）
