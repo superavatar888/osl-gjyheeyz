@@ -64,7 +64,7 @@ const listforever = false;
 const listTime = 720; //m -> 12h 挂单有效期
 // 动态间隔：保证一轮恰好 48h，避免 48h 内重复上架（重复挂单不显示）
 const CYCLE_SECONDS = 86400; // 24h
-let intervalTime = 3000; // 3s（Infura 限流止血：46 repo 同时 1s 超 6 key 额度）
+let intervalTime = 5000; // 3s（Infura 限流止血：46 repo 同时 1s 超 6 key 额度）
 const listing_time = 0;
 
 let max_price = process.env.MAX_PRICE || 0.1;
@@ -126,7 +126,7 @@ for (const infuraKey of INFURA_KEYS) {
     const provider = new ethers.JsonRpcProvider("https://mainnet.infura.io/v3/" + infuraKey);
     const w = new ethers.Wallet(hd.privateKey, provider);
     for (const apiKey of API_KEYS) {
-        openseaSDKs.push(new OpenSeaSDK(w, { chain: Chain.Mainnet, apiKey }, Logger.opensea));
+        openseaSDKs.push({ sdk: new OpenSeaSDK(w, { chain: Chain.Mainnet, apiKey }, Logger.opensea), apiKey, infuraKey });
     }
 }
 Logger.warn(`轮动组合 = ${openseaSDKs.length} 个（API ${API_KEYS.length} × Infura ${INFURA_KEYS.length}）`);
@@ -241,7 +241,7 @@ function check_list_time(token) {
 
 function recalcInterval() {
     // 3s 间隔（Infura 限流止血）
-    intervalTime = 3000;
+    intervalTime = 5000;
     const n = tokens.length > 0 ? tokens.length : 10000;
     Logger.info(`🔁 固定间隔: token数=${n}, 间隔=3s`);
 }
@@ -280,7 +280,10 @@ async function main() {
 
         Logger.info(`Start list: expirationTime: ${expirationTime}, tokenId: ${tokenId}, current_time: ${current_time}, current_index: ${current_index}`);
         console.log(expirationTime);
-        const listing = await withTimeout(openseaSDKs[sdkIdx++ % openseaSDKs.length].createListing({
+        const _combo = openseaSDKs[sdkIdx % openseaSDKs.length];
+        Logger.info(`INFURA实际=${_combo.infuraKey.slice(0,8)} API实际=${_combo.apiKey.slice(0,8)} idx=${sdkIdx % openseaSDKs.length}`);
+        sdkIdx++;
+        const listing = await withTimeout(_combo.sdk.createListing({
             asset: {
                 tokenId: tokenId,
                 tokenAddress: NFT_CONTRACT_ADDRESS
