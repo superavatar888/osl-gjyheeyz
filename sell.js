@@ -119,18 +119,13 @@ if (hd.address.toLowerCase() !== OWNER_ADDRESS.toLowerCase()) {
     Logger.warn(`⚠️  WALLET 地址(${hd.address}) 与 OWNER_ADDRESS(${OWNER_ADDRESS}) 不一致，将使用 wallet 地址签名`);
 }
 
-// API KEY × Infura KEY 组合 SDK（轮动模式：每个组合一个 SDK，挂单时轮换）
-// 例：2 API key × 4 Infura key = 8 个 SDK 轮换 → 1s 间隔不超限速
-const openseaSDKs = [];
-for (const infuraKey of INFURA_KEYS) {
-    const provider = new ethers.JsonRpcProvider("https://mainnet.infura.io/v3/" + infuraKey);
+// 固定 Infura key（不轮动——每 repo 分配固定 key，API key 轮换）
+const FIXED_INFURA = INFURA_KEYS[0] || INFURA_KEY;
+const openseaSDKs = API_KEYS.map(apiKey => {
+    const provider = new ethers.JsonRpcProvider("https://mainnet.infura.io/v3/" + FIXED_INFURA);
     const w = new ethers.Wallet(hd.privateKey, provider);
-    for (const apiKey of API_KEYS) {
-        openseaSDKs.push({ sdk: new OpenSeaSDK(w, { chain: Chain.Mainnet, apiKey }, Logger.opensea), apiKey, infuraKey });
-    }
-}
-Logger.warn(`轮动组合 = ${openseaSDKs.length} 个（API ${API_KEYS.length} × Infura ${INFURA_KEYS.length}）`);
-Logger.warn(`INFURA 首个新 key = ${mask(INFURA_KEYS[0], 6)}`);
+    return { sdk: new OpenSeaSDK(w, { chain: Chain.Mainnet, apiKey }, Logger.opensea), apiKey, infuraKey: FIXED_INFURA };
+});
 let sdkIdx = 0;
 
 function isFileExisted(filepath) {
