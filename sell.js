@@ -44,7 +44,7 @@ Logger.info("==========================KEYS===============================");
 // 安全：助记词/API key 打码显示，避免暴露（GitHub Actions 日志公开）
 const mask = (s, keep = 6) => s ? s.slice(0, keep) + "..." + s.slice(-4) : "(未设置)";
 Logger.warn(`WALLET_INDEX = ${WALLET_INDEX}`);
-Logger.warn(`NODE_API_KEY = ${mask(INFURA_KEY, 8)}`);
+Logger.warn(`INFURA_KEY(旧,仅日志) = ${mask(INFURA_KEY, 8)}`);
 Logger.warn(`NFT_CONTRACT_ADDRESS = ${NFT_CONTRACT_ADDRESS}`);
 Logger.warn(`OWNER_ADDRESS = ${OWNER_ADDRESS}`);
 Logger.warn(`NETWORK = ${NETWORK}`);
@@ -130,6 +130,7 @@ for (const infuraKey of INFURA_KEYS) {
     }
 }
 Logger.warn(`轮动组合 = ${openseaSDKs.length} 个（API ${API_KEYS.length} × Infura ${INFURA_KEYS.length}）`);
+Logger.warn(`INFURA 首个新 key = ${mask(INFURA_KEYS[0], 6)}`);
 let sdkIdx = 0;
 
 function isFileExisted(filepath) {
