@@ -315,19 +315,11 @@ async function main() {
             record_list_time(tokens[current_index]);
             err_retrycount = 0;
             lastActivity = Date.now();
-            if (current_index >= tokens.length - 1) {
-                current_index = 0;
-            } else {
-                current_index += 1;
-            }
-            recordListIndex(current_index);
             if (intervalTime > 0) {
                 await wait(intervalTime);
             }
-            return;
-        }
-        // 已卖出/无效资产类错误 → 剔除该 token，继续下一个
-        if (/404|not found|does not exist|doesn'?t exist|no asset|invalid asset|not indexed|NOT_FOUND|asset.*not/i.test(errMsg)) {
+            // 不 return：让流程继续（下方推进 index + main() 递归）
+        } else if (/404|not found|does not exist|doesn'?t exist|no asset|invalid asset|not indexed|NOT_FOUND|asset.*not/i.test(errMsg)) {
             Logger.warn(`🚫 token 已卖出/无效，剔除: ${tokens[current_index]}  | ${errMsg.slice(0, 80)}`);
             try {
                 // 从 tokens.json 移除该行
