@@ -290,7 +290,7 @@ async function main() {
             expirationTime: expirationTime,
             accountAddress: OWNER_ADDRESS,
             listingTime: listingTime,
-        }), 60000, "createListing 超时(60s)");
+        }), 20000, "createListing 超时(20s)");
 
         Logger.success(`Successfully created a listing! tokenId: ${tokenId}, price: ${price} ETH, cost sec = ${(Date.now() / 1000 - current_time).toFixed(2)}, current_index: ${current_index}`);
         lastActivity = Date.now();
