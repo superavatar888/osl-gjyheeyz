@@ -308,6 +308,23 @@ async function main() {
 
     } catch (e) {
         const errMsg = (e && e.message) ? e.message : String(e);
+        // enforcement 提示：OpenSea 版税强制校验提示，但订单实际已创建（网页显示+可购买）→ 当作成功
+        if (/enforcement/i.test(errMsg)) {
+            Logger.warn(`⚠️ enforcement 提示（订单已创建）: ${tokens[current_index]}  | ${errMsg.slice(0, 60)}`);
+            record_list_time(tokenId);
+            err_retrycount = 0;
+            lastActivity = Date.now();
+            if (current_index >= tokens.length - 1) {
+                current_index = 0;
+            } else {
+                current_index += 1;
+            }
+            recordListIndex(current_index);
+            if (intervalTime > 0) {
+                await wait(intervalTime);
+            }
+            return;
+        }
         // 已卖出/无效资产类错误 → 剔除该 token，继续下一个
         if (/404|not found|does not exist|doesn'?t exist|no asset|invalid asset|not indexed|NOT_FOUND|asset.*not/i.test(errMsg)) {
             Logger.warn(`🚫 token 已卖出/无效，剔除: ${tokens[current_index]}  | ${errMsg.slice(0, 80)}`);
