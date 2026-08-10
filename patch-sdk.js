@@ -89,3 +89,35 @@ if (fs.existsSync(seaportPath)) {
 } else {
     console.log('⚠️ seaport-js 未找到');
 }
+
+// ========== 3. 禁用余额/批准检查（跳过 multicall/supportsInterface——省 Infura 请求）==========
+if (fs.existsSync(seaportPath)) {
+    let ss2 = fs.readFileSync(seaportPath, 'utf-8');
+    const oldCfg = 'balanceAndApprovalChecksOnOrderCreation = _e === void 0 ? true : _e';
+    const newCfg = 'balanceAndApprovalChecksOnOrderCreation = _e === void 0 ? false : _e';
+    if (ss2.includes(oldCfg) && !ss2.includes('PATCH: 禁用余额检查')) {
+        ss2 = ss2.replace(oldCfg, newCfg);
+        fs.writeFileSync(seaportPath, ss2);
+        console.log('✅ 余额/批准检查已禁用（省 Infura 请求）');
+    } else if (ss2.includes('PATCH: 禁用余额检查')) {
+        console.log('⏭️ 余额检查已禁用');
+    } else {
+        console.log('⚠️ 配置 pattern 未匹配');
+    }
+}
+
+// ========== 3. 禁用余额/批准检查（跳过 multicall/supportsInterface——省 Infura 请求）==========
+if (fs.existsSync(seaportPath)) {
+    let ss2 = fs.readFileSync(seaportPath, 'utf-8');
+    const oldCfg = 'balanceAndApprovalChecksOnOrderCreation = _e === void 0 ? true : _e';
+    const newCfg = 'balanceAndApprovalChecksOnOrderCreation = _e === void 0 ? false : _e';
+    if (ss2.includes(oldCfg) && !ss2.includes('PATCH: 禁用余额检查')) {
+        ss2 = ss2.replace(oldCfg, '// PATCH: 禁用余额检查（省 Infura） ' + newCfg);
+        fs.writeFileSync(seaportPath, ss2);
+        console.log('✅ 余额/批准检查已禁用（省 Infura 请求）');
+    } else if (ss2.includes('PATCH: 禁用余额检查')) {
+        console.log('⏭️ 余额检查已禁用');
+    } else {
+        console.log('⚠️ 配置 pattern 未匹配');
+    }
+}
