@@ -311,7 +311,7 @@ async function main() {
         // enforcement 提示：OpenSea 版税强制校验提示，但订单实际已创建（网页显示+可购买）→ 当作成功
         if (/enforcement/i.test(errMsg)) {
             Logger.warn(`⚠️ enforcement 提示（订单已创建）: ${tokens[current_index]}  | ${errMsg.slice(0, 60)}`);
-            record_list_time(tokenId);
+            record_list_time(tokens[current_index]);
             err_retrycount = 0;
             lastActivity = Date.now();
             if (current_index >= tokens.length - 1) {
