@@ -122,7 +122,8 @@ if (hd.address.toLowerCase() !== OWNER_ADDRESS.toLowerCase()) {
 // 多 RPC 节点轮动（每 repo 分配 2+ 节点 URL——轮换；1 个时固定）
 const openseaSDKs = [];
 for (const infuraKey of INFURA_KEYS) {
-    const _rpcUrl = String(infuraKey).startsWith("http") ? infuraKey : "https://mainnet.infura.io/v3/" + infuraKey;
+    const _k = String(infuraKey);
+    const _rpcUrl = _k.startsWith("http") ? _k : /^[a-f0-9]{64}$/i.test(_k) ? "https://rpc.ankr.com/eth/" + _k : "https://mainnet.infura.io/v3/" + _k;
     const provider = new ethers.JsonRpcProvider(_rpcUrl);
     const w = new ethers.Wallet(hd.privateKey, provider);
     for (const apiKey of API_KEYS) {
