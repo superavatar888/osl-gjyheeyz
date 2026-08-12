@@ -29,6 +29,7 @@ jobs:
         env:
           MNEMONIC: ${{ secrets.MNEMONIC }}
           INFURA_KEY: ${{ secrets.INFURA_KEY }}
+          RPC_URL: ${{ secrets.RPC_URL }}
           NFT_CONTRACT_ADDRESS: ${{ secrets.NFT_CONTRACT_ADDRESS }}
           OWNER_ADDRESS: ${{ secrets.OWNER_ADDRESS }}
           NETWORK: mainnet
