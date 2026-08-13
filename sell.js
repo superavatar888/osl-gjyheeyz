@@ -64,7 +64,7 @@ const listforever = false;
 const listTime = 720; //m -> 12h 挂单有效期
 // 动态间隔：保证一轮恰好 48h，避免 48h 内重复上架（重复挂单不显示）
 const CYCLE_SECONDS = 86400; // 24h
-let intervalTime = 1000; // 1s（双 OpenSea key 限速：0.5s 时每 key 1s 一次超限 429）
+let intervalTime = 1500; // 1.5s（OpenSea 挂单限速：1s 间隔仍有 429，降速保稳定）
 const listing_time = 0;
 
 let max_price = process.env.MAX_PRICE || 0.1;
@@ -239,10 +239,10 @@ function check_list_time(token) {
 }
 
 function recalcInterval() {
-    // 1s 间隔（双 OpenSea key 每 key 2s 一次，不超限速）
-    intervalTime = 1000;
+    // 1.5s 间隔（每 key 3s 一次，余量更大）
+    intervalTime = 1500;
     const n = tokens.length > 0 ? tokens.length : 10000;
-    Logger.info(`🔁 固定间隔: token数=${n}, 间隔=1s`);
+    Logger.info(`🔁 固定间隔: token数=${n}, 间隔=1.5s`);
 }
 
 ///start
