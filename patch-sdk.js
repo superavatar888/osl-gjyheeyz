@@ -121,3 +121,58 @@ if (fs.existsSync(seaportPath)) {
         console.log('⚠️ 配置 pattern 未匹配');
     }
 }
+// ========== 4. 缓存 getNFT/getCollection（挂单从每单 3 个 OpenSea 请求降到 1 个——限速 60/min/key）==========
+const ordersPath = path.join(process.cwd(), 'node_modules', '@opensea', 'sdk', 'lib', 'sdk', 'orders.js');
+if (fs.existsSync(ordersPath)) {
+    let os = fs.readFileSync(ordersPath, 'utf-8');
+    if (!os.includes('PATCH: NFT/collection 缓存')) {
+        // 4a. 在类里插入两个缓存方法（插到 getNFTItems 前）
+        const anchor = `    getNFTItems(nfts, quantities = []) {`;
+        const methods = `    // PATCH: NFT/collection 缓存（同一合约的 tokenStandard/contract/collection 不变，只查一次）
+    async _patchedGetNFT(tokenAddress, tokenId) {
+        if (!this._nftInfoCache) { this._nftInfoCache = new Map(); }
+        const key = String(tokenAddress).toLowerCase();
+        if (this._nftInfoCache.has(key)) {
+            const base = this._nftInfoCache.get(key);
+            return { ...base, identifier: tokenId };
+        }
+        const { nft } = await this.context.api.getNFT(tokenAddress, tokenId);
+        this._nftInfoCache.set(key, {
+            tokenStandard: nft.tokenStandard,
+            contract: nft.contract,
+            collection: nft.collection,
+        });
+        return { ...this._nftInfoCache.get(key), identifier: tokenId };
+    }
+    async _patchedGetCollection(slug) {
+        if (!this._collectionCache) { this._collectionCache = new Map(); }
+        if (this._collectionCache.has(slug)) { return this._collectionCache.get(slug); }
+        const c = await this.context.api.getCollection(slug);
+        this._collectionCache.set(slug, c);
+        return c;
+    }
+    getNFTItems(nfts, quantities = []) {`;
+        if (os.includes(anchor)) { os = os.replace(anchor, methods); }
+        else { console.log('⚠️ orders.js 锚点未找到'); process.exit(1); }
+
+        // 4b. 替换 4 处 getNFT/getCollection 调用
+        const oldA = `const { nft } = await this.context.api.getNFT(asset.tokenAddress, asset.tokenId);`;
+        const newA = `const nft = await this._patchedGetNFT(asset.tokenAddress, asset.tokenId);`;
+        const oldB = `const collection = await this.context.api.getCollection(nft.collection);`;
+        const newB = `const collection = await this._patchedGetCollection(nft.collection);`;
+        const na = os.split(oldA).length - 1;
+        const nb = os.split(oldB).length - 1;
+        if (na === 4 && nb === 4) {
+            os = os.split(oldA).join(newA).split(oldB).join(newB);
+            fs.writeFileSync(ordersPath, os);
+            console.log(`✅ getNFT/getCollection 缓存已启用（替换 ${na} 处调用）`);
+        } else {
+            console.log(`⚠️ 调用次数异常: getNFT=${na}(期望4) getCollection=${nb}(期望4)`);
+            process.exit(1);
+        }
+    } else {
+        console.log('⏭️ NFT/collection 缓存已存在');
+    }
+} else {
+    console.log('⚠️ orders.js 未找到');
+}
