@@ -176,3 +176,24 @@ if (fs.existsSync(ordersPath)) {
 } else {
     console.log('⚠️ orders.js 未找到');
 }
+
+// ========== 5. 禁用 SDK 内部 429 自动重试（3 次重试=4 请求打同一限速窗口，放大 429）==========
+const rateLimitPath = path.join(process.cwd(), 'node_modules', '@opensea', 'sdk', 'lib', 'utils', 'rateLimit.js');
+if (fs.existsSync(rateLimitPath)) {
+    let rl = fs.readFileSync(rateLimitPath, 'utf-8');
+    if (!rl.includes('PATCH: 禁用 SDK 重试')) {
+        const oldMax = 'const DEFAULT_MAX_RETRIES = 3;';
+        const newMax = 'const DEFAULT_MAX_RETRIES = 0; // PATCH: 禁用 SDK 重试（429 直接抛给 sell.js 处理，避免放大请求）';
+        if (rl.includes(oldMax)) {
+            rl = rl.replace(oldMax, newMax);
+            fs.writeFileSync(rateLimitPath, rl);
+            console.log('✅ SDK 429 自动重试已禁用（DEFAULT_MAX_RETRIES=0）');
+        } else {
+            console.log('⚠️ rateLimit.js 的 DEFAULT_MAX_RETRIES 未匹配');
+        }
+    } else {
+        console.log('⏭️ SDK 重试已禁用过');
+    }
+} else {
+    console.log('⚠️ rateLimit.js 未找到');
+}
