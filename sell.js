@@ -337,10 +337,7 @@ async function main() {
         } else {
             Logger.err(`logerr: ${errMsg}, err_retrycount: ${err_retrycount}, current_index: ${current_index}`);
             err_retrycount += 1;
-            if (/429|Too Many|rate limit/i.test(errMsg)) {
-                // 429 限速：等 5s 让限速窗口喘息，再继续下一个（避免连续 429 打爆窗口）
-                await wait(5000);
-            } else if (err_retrycount > RETRY_COUNT) {
+            if (err_retrycount > RETRY_COUNT) {
                 await wait(15000);
             }
         }
