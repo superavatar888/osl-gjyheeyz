@@ -64,7 +64,7 @@ const listforever = false;
 const listTime = 720; //m -> 12h 挂单有效期
 // 动态间隔：保证一轮恰好 48h，避免 48h 内重复上架（重复挂单不显示）
 const CYCLE_SECONDS = 86400; // 24h
-let intervalTime = 1000; // 3s（Infura 限流止血：46 repo 同时 1s 超 6 key 额度）
+let intervalTime = 500; // 0.5s（双 Ankr key 轮动）
 const listing_time = 0;
 
 let max_price = process.env.MAX_PRICE || 0.1;
@@ -239,10 +239,10 @@ function check_list_time(token) {
 }
 
 function recalcInterval() {
-    // 3s 间隔（Infura 限流止血）
-    intervalTime = 1000;
+    // 0.5s 间隔（双 Ankr key 轮动）
+    intervalTime = 500;
     const n = tokens.length > 0 ? tokens.length : 10000;
-    Logger.info(`🔁 固定间隔: token数=${n}, 间隔=3s`);
+    Logger.info(`🔁 固定间隔: token数=${n}, 间隔=0.5s`);
 }
 
 ///start
