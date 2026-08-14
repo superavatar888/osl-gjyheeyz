@@ -114,6 +114,8 @@ var current_index = 0;
 
 var err_retrycount = 0;
 
+var rateLimitHits = 0;
+
 var tokens = [];
 
 var cyclelist = true;
@@ -612,6 +614,8 @@ async function main() {
 
         err_retrycount = 0;
 
+        rateLimitHits = 0;
+
         if (intervalTime > 0) {
 
             await wait(intervalTime);
@@ -678,7 +682,14 @@ async function main() {
 
             if (/429|Too Many|rate limit/i.test(errMsg)) {
 
-                await wait(3000);
+                // PATCH: 429 按 IP 限速 60/min 退避——等待超过限速窗口再重试，避免反复撞墙
+                rateLimitHits += 1;
+
+                const backoff = rateLimitHits >= 5 ? 60000 : (rateLimitHits >= 3 ? 20000 : 10000);
+
+                Logger.warn(`⏳ 429 限速，退避 ${backoff / 1000}s（累计 ${rateLimitHits} 次）`);
+
+                await wait(backoff);
 
             } else if (err_retrycount > RETRY_COUNT) {
 
