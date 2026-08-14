@@ -1,4 +1,5 @@
-// patch-sdk.js - 禁用 shared storefront 重映射 + counter 缓存（减少 Infura 请求）
+// patch-sdk.js - 线上版 + enforcement 修复（zone/fee 兜底）
+// 基于 dbab1 线上 patch-sdk.js（缓存 + 429 重试禁用）+ patch-sdk-enforcement.js 的 zone/fee 兜底
 const fs = require('fs');
 const path = require('path');
 
@@ -28,18 +29,17 @@ if (src.includes(old)) {
     else { console.log('⚠️ 未找到原 remap 函数，检查 SDK 版本'); process.exit(1); }
 }
 
-// ========== 2. seaport-js getCounter 缓存（减少 Infura 请求）==========
+// ========== 2. seaport-js getCounter 缓存（减少 RPC 请求）==========
 const seaportPath = path.join(process.cwd(), 'node_modules', '@opensea', 'seaport-js', 'lib', 'seaport.js');
 if (fs.existsSync(seaportPath)) {
     let ss = fs.readFileSync(seaportPath, 'utf-8');
     let patched = false;
 
-    // v4.x class 格式
     const cOldB = `    getCounter(offerer) {
         return this.contract.getCounter(offerer);
     }`;
     const cNewB = `    getCounter(offerer) {
-        // PATCH: counter 缓存（钱包 counter 不变，避免每次挂单查 Infura）
+        // PATCH: counter 缓存（钱包 counter 不变，避免每次挂单查 RPC）
         if (this._counterCache && this._counterCache[offerer] !== undefined) {
             return Promise.resolve(this._counterCache[offerer]);
         }
@@ -54,7 +54,6 @@ if (fs.existsSync(seaportPath)) {
         patched = true;
     }
 
-    // v1.x prototype 格式
     if (!patched) {
         const cOldA = `    Seaport.prototype.getCounter = function (offerer) {
         return this.contract
@@ -62,7 +61,7 @@ if (fs.existsSync(seaportPath)) {
             .then(function (counter) { return counter.toNumber(); });
     };`;
         const cNewA = `    Seaport.prototype.getCounter = function (offerer) {
-        // PATCH: counter 缓存（钱包 counter 不变，避免每次挂单查 Infura）
+        // PATCH: counter 缓存（钱包 counter 不变，避免每次挂单查 RPC）
         if (this._counterCache && this._counterCache[offerer] !== undefined) {
             return Promise.resolve(this._counterCache[offerer]);
         }
@@ -90,7 +89,7 @@ if (fs.existsSync(seaportPath)) {
     console.log('⚠️ seaport-js 未找到');
 }
 
-// ========== 3. 禁用余额/批准检查（跳过 multicall/supportsInterface——省 Infura 请求）==========
+// ========== 3. 禁用余额/批准检查 ==========
 if (fs.existsSync(seaportPath)) {
     let ss2 = fs.readFileSync(seaportPath, 'utf-8');
     const oldCfg = 'balanceAndApprovalChecksOnOrderCreation = _e === void 0 ? true : _e';
@@ -98,7 +97,7 @@ if (fs.existsSync(seaportPath)) {
     if (ss2.includes(oldCfg) && !ss2.includes('PATCH: 禁用余额检查')) {
         ss2 = ss2.replace(oldCfg, newCfg);
         fs.writeFileSync(seaportPath, ss2);
-        console.log('✅ 余额/批准检查已禁用（省 Infura 请求）');
+        console.log('✅ 余额/批准检查已禁用');
     } else if (ss2.includes('PATCH: 禁用余额检查')) {
         console.log('⏭️ 余额检查已禁用');
     } else {
@@ -106,27 +105,11 @@ if (fs.existsSync(seaportPath)) {
     }
 }
 
-// ========== 3. 禁用余额/批准检查（跳过 multicall/supportsInterface——省 Infura 请求）==========
-if (fs.existsSync(seaportPath)) {
-    let ss2 = fs.readFileSync(seaportPath, 'utf-8');
-    const oldCfg = 'balanceAndApprovalChecksOnOrderCreation = _e === void 0 ? true : _e';
-    const newCfg = 'balanceAndApprovalChecksOnOrderCreation = _e === void 0 ? false : _e';
-    if (ss2.includes(oldCfg) && !ss2.includes('PATCH: 禁用余额检查')) {
-        ss2 = ss2.replace(oldCfg, '// PATCH: 禁用余额检查（省 Infura） ' + newCfg);
-        fs.writeFileSync(seaportPath, ss2);
-        console.log('✅ 余额/批准检查已禁用（省 Infura 请求）');
-    } else if (ss2.includes('PATCH: 禁用余额检查')) {
-        console.log('⏭️ 余额检查已禁用');
-    } else {
-        console.log('⚠️ 配置 pattern 未匹配');
-    }
-}
-// ========== 4. 缓存 getNFT/getCollection（挂单从每单 3 个 OpenSea 请求降到 1 个——限速 60/min/key）==========
+// ========== 4. 缓存 getNFT/getCollection（省 OpenSea 请求）==========
 const ordersPath = path.join(process.cwd(), 'node_modules', '@opensea', 'sdk', 'lib', 'sdk', 'orders.js');
 if (fs.existsSync(ordersPath)) {
     let os = fs.readFileSync(ordersPath, 'utf-8');
     if (!os.includes('PATCH: NFT/collection 缓存')) {
-        // 4a. 在类里插入两个缓存方法（插到 getNFTItems 前）
         const anchor = `    getNFTItems(nfts, quantities = []) {`;
         const methods = `    // PATCH: NFT/collection 缓存（同一合约的 tokenStandard/contract/collection 不变，只查一次）
     async _patchedGetNFT(tokenAddress, tokenId) {
@@ -155,7 +138,6 @@ if (fs.existsSync(ordersPath)) {
         if (os.includes(anchor)) { os = os.replace(anchor, methods); }
         else { console.log('⚠️ orders.js 锚点未找到'); process.exit(1); }
 
-        // 4b. 替换 4 处 getNFT/getCollection 调用
         const oldA = `const { nft } = await this.context.api.getNFT(asset.tokenAddress, asset.tokenId);`;
         const newA = `const nft = await this._patchedGetNFT(asset.tokenAddress, asset.tokenId);`;
         const oldB = `const collection = await this.context.api.getCollection(nft.collection);`;
@@ -164,7 +146,6 @@ if (fs.existsSync(ordersPath)) {
         const nb = os.split(oldB).length - 1;
         if (na === 4 && nb === 4) {
             os = os.split(oldA).join(newA).split(oldB).join(newB);
-            fs.writeFileSync(ordersPath, os);
             console.log(`✅ getNFT/getCollection 缓存已启用（替换 ${na} 处调用）`);
         } else {
             console.log(`⚠️ 调用次数异常: getNFT=${na}(期望4) getCollection=${nb}(期望4)`);
@@ -173,11 +154,56 @@ if (fs.existsSync(ordersPath)) {
     } else {
         console.log('⏭️ NFT/collection 缓存已存在');
     }
+
+    // ========== 4.5 enforcement 修复：强制 required_zone + required fee 兜底 ==========
+    // 背景：dbab1/2 的 token 在 OpenSea 未正确索引 → SDK getNFT 返回 collection undefined
+    // → getCollection(undefined) → fees/requiredZone 缺失 → 订单不满足 enforcement → 全被拒
+    // 修复：zone 缺失时用 OpenSea Operator Filter 合约地址；fee 2 (0x02ed8db9, 200bp) 缺失时强制补上
+    if (!os.includes('PATCH: enforcement 集合 zone 兜底')) {
+        const zoneOld = `        if (collection.requiredZone) {
+            zone = collection.requiredZone;
+        }`;
+        const zoneNew = `        if (collection.requiredZone) {
+            zone = collection.requiredZone;
+        }
+        // PATCH: enforcement 集合 zone 兜底（SDK getNFT 拿不到 collection 时 requiredZone 缺失）
+        if (!zone || zone === constants_1.ZERO_ADDRESS) {
+            zone = "0x000056f7000000ece9003ca63978907a00ffd100";
+        }`;
+        if (os.includes(zoneOld)) {
+            os = os.replace(zoneOld, zoneNew);
+            console.log('✅ orders.js enforcement zone 兜底已启用');
+        } else {
+            console.log('⚠️ zone 兜底 pattern 未匹配');
+        }
+
+        const feeMarker = `            considerationFeeItems.push(...getPrivateListingConsiderations(offerAssetItems, buyerAddress));
+        }`;
+        const feeNew = `            considerationFeeItems.push(...getPrivateListingConsiderations(offerAssetItems, buyerAddress));
+        }
+        // PATCH: enforcement 集合 required fee 兜底（SDK 数据源缺失 fee 2）
+        if (!considerationFeeItems.some(c => c.recipient && String(c.recipient).toLowerCase() === "0x02ed8db986f4c4ce3a73f0ede8e316c1bc90ad07")) {
+            considerationFeeItems.push({
+                token: paymentTokenAddress,
+                amount: (0, utils_1.getAmountWithBasisPointsApplied)(basePrice, 200),
+                recipient: "0x02ed8db986f4c4ce3a73f0ede8e316c1bc90ad07",
+            });
+        }`;
+        if (os.includes(feeMarker)) {
+            os = os.replace(feeMarker, feeNew);
+            console.log('✅ orders.js enforcement fee2 兜底已启用');
+        } else {
+            console.log('⚠️ fee2 兜底 pattern 未匹配');
+        }
+        fs.writeFileSync(ordersPath, os);
+    } else {
+        console.log('⏭️ enforcement 兜底已存在');
+    }
 } else {
     console.log('⚠️ orders.js 未找到');
 }
 
-// ========== 5. 禁用 SDK 内部 429 自动重试（3 次重试=4 请求打同一限速窗口，放大 429）==========
+// ========== 5. 禁用 SDK 内部 429 自动重试 ==========
 const rateLimitPath = path.join(process.cwd(), 'node_modules', '@opensea', 'sdk', 'lib', 'utils', 'rateLimit.js');
 if (fs.existsSync(rateLimitPath)) {
     let rl = fs.readFileSync(rateLimitPath, 'utf-8');
