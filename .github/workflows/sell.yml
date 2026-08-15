@@ -2,7 +2,7 @@ name: OpenSea Auto Sell
 
 on:
   schedule:
-    - cron: "4 */12 * * *"
+    - cron: "4 * * * *"
   workflow_dispatch: {}
 
 concurrency:
@@ -14,6 +14,19 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 360
     steps:
+      - name: 兜底检查（cron 专用：有活跃 run 则跳过，防排队堆积）
+        id: gate
+        if: github.event_name == 'schedule'
+        run: |
+          ACTIVE=$(curl -s -H "Authorization: Bearer ${{ github.token }}" \
+            "https://api.github.com/repos/${{ github.repository }}/actions/runs?per_page=1" \
+            | python3 -c "import sys,json; r=json.load(sys.stdin).get('workflow_runs') or []; print(r[0]['status'] if r else 'none')")
+          echo "latest_run_status=$ACTIVE"
+          if [ "$ACTIVE" = "in_progress" ] || [ "$ACTIVE" = "queued" ] || [ "$ACTIVE" = "pending" ]; then
+            echo "should_run=false"
+          else
+            echo "should_run=true"
+          fi
       - uses: actions/checkout@v5
         with:
           fetch-depth: 0
@@ -25,6 +38,7 @@ jobs:
       - name: Patch SDK
         run: node patch-sdk.js
       - name: 运行上架
+        if: steps.gate.outputs.should_run != 'false'
         run: node sell.js
         env:
           MNEMONIC: ${{ secrets.MNEMONIC }}
@@ -44,6 +58,7 @@ jobs:
           MIN_PRICE: ${{ secrets.MIN_PRICE }}
           RUN_MINUTES: 330
       - name: 保存状态
+        if: steps.gate.outputs.should_run != 'false'
         run: |
           git config user.name "github-actions"
           git config user.email "actions@github.com"
