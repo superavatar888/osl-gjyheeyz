@@ -126,7 +126,7 @@ const RETRY_COUNT = 2;
 
 const listforever = false;
 
-const listTime = 720; //m -> 12h 挂单有效期
+const listTime = 60; //m -> 1h 挂单有效期（绕开 OpenSea ~5000 活跃挂单上限）
 
 // 动态间隔：保证一轮恰好 48h，避免 48h 内重复上架（重复挂单不显示）
 
