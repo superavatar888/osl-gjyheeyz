@@ -223,3 +223,31 @@ if (fs.existsSync(rateLimitPath)) {
 } else {
     console.log('⚠️ rateLimit.js 未找到');
 }
+
+
+// ===== PATCH: chainId 硬编码(2026-08-22)——每单省 1 次 eth_chainId RPC =====
+// seaport-js 签名时 _getDomainData 调 provider.getNetwork() 发 eth_chainId(Ankr 200 credits/次)
+// 46 repo 满速挂单每月 ~9000 万次,占 92 key × 200M 额度 ~98%
+// 硬编码主网 chainId=1:每单 RPC 归零(签名域与真实值一致,订单有效性不变)
+// 注意:仅适用于以太坊主网;若换链(BSC/Arbitrum 等)需改 chainId 值
+try {
+  const _fs = require('fs');
+  const _sp = require('path').join(process.cwd(), 'node_modules', '@opensea', 'seaport-js', 'lib', 'seaport.js');
+  if (_fs.existsSync(_sp)) {
+    let _s = _fs.readFileSync(_sp, 'utf-8');
+    if (!_s.includes('PATCH: chainId 硬编码')) {
+      const _old = 'const { chainId } = await this.provider.getNetwork();';
+      if (_s.includes(_old)) {
+        _s = _s.replace(_old, '// PATCH: chainId 硬编码主网(1)\n        const chainId = 1n;');
+        _fs.writeFileSync(_sp, _s);
+        console.log('✅ chainId 已硬编码(每单省 1 次 eth_chainId)');
+      } else {
+        console.log('⚠️ chainId patch:未匹配 getNetwork 行(seaport 版本格式未知)');
+      }
+    } else {
+      console.log('⏭️ chainId 已硬编码(patch 已存在)');
+    }
+  } else {
+    console.log('⚠️ seaport-js lib/seaport.js 未找到');
+  }
+} catch (e) { console.error('chainId patch 失败:', e.message); }
