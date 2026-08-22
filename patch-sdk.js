@@ -225,24 +225,39 @@ if (fs.existsSync(rateLimitPath)) {
 }
 
 
+
+
 // ===== PATCH: chainId 硬编码(2026-08-22)——每单省 1 次 eth_chainId RPC =====
 // seaport-js 签名时 _getDomainData 调 provider.getNetwork() 发 eth_chainId(Ankr 200 credits/次)
 // 46 repo 满速挂单每月 ~9000 万次,占 92 key × 200M 额度 ~98%
 // 硬编码主网 chainId=1:每单 RPC 归零(签名域与真实值一致,订单有效性不变)
 // 注意:仅适用于以太坊主网;若换链(BSC/Arbitrum 等)需改 chainId 值
+// v2:兼容 4.1.6 class 格式与 4.1.7+ prototype 编译格式,并打印 seaport-js 版本
+const _pj = require('path').join(process.cwd(), 'node_modules', '@opensea', 'seaport-js', 'package.json');
 try {
+  console.log('[chainId-patch] seaport-js 版本:', require(_pj).version);
   const _fs = require('fs');
   const _sp = require('path').join(process.cwd(), 'node_modules', '@opensea', 'seaport-js', 'lib', 'seaport.js');
   if (_fs.existsSync(_sp)) {
     let _s = _fs.readFileSync(_sp, 'utf-8');
     if (!_s.includes('PATCH: chainId 硬编码')) {
-      const _old = 'const { chainId } = await this.provider.getNetwork();';
-      if (_s.includes(_old)) {
-        _s = _s.replace(_old, '// PATCH: chainId 硬编码主网(1)\n        const chainId = 1n;');
+      let _patched = false;
+      // 格式1: 4.1.6 class 未编译
+      const _old1 = 'const { chainId } = await this.provider.getNetwork();';
+      if (_s.includes(_old1)) {
+        _s = _s.replace(_old1, '// PATCH: chainId 硬编码主网(1)\n        const chainId = 1n;');
+        _patched = true;
+      }
+      // 格式2: 4.1.7+ prototype 编译后(yield getNetwork → yield 常量对象)
+      if (!_patched && _s.includes('case 0: return [4 /*yield*/, this.provider.getNetwork()];')) {
+        _s = _s.replace('case 0: return [4 /*yield*/, this.provider.getNetwork()];', 'case 0: return [4 /*yield*/, Promise.resolve({ chainId: 1n })];');
+        _patched = true;
+      }
+      if (_patched) {
         _fs.writeFileSync(_sp, _s);
         console.log('✅ chainId 已硬编码(每单省 1 次 eth_chainId)');
       } else {
-        console.log('⚠️ chainId patch:未匹配 getNetwork 行(seaport 版本格式未知)');
+        console.log('⚠️ chainId patch:未匹配 seaport 版本格式,请人工检查');
       }
     } else {
       console.log('⏭️ chainId 已硬编码(patch 已存在)');
